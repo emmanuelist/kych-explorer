@@ -2,7 +2,7 @@
 
 A privacy-first Bitcoin transaction ancestry explorer. Trace the provenance of any UTXO through an interactive graph, attach [BIP-329](https://github.com/bitcoin/bips/blob/master/bip-0329.mediawiki) labels, and keep everything local — powered by your own Bitcoin Core node.
 
-> Built for the [BOSS 2026 Challenge](https://github.com/nicklitvin/boss) — Month 2 Portfolio Project.
+> Built for the [BOSS 2026 Challenge](https://bosschallenge.xyz/) — Month 2 Portfolio Project.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Bitcoin](https://img.shields.io/badge/network-signet%20%7C%20mainnet-orange)
@@ -217,4 +217,4 @@ MIT
 - [Bitcoin Core](https://github.com/bitcoin/bitcoin)
 - [BIP-329](https://github.com/bitcoin/bips/blob/master/bip-0329.mediawiki) — Wallet Labels
 - [Cytoscape.js](https://js.cytoscape.org/)
-- [BOSS 2026 Challenge](https://github.com/nicklitvin/boss)
+- [BOSS 2026 Challenge](https://bosschallenge.xyz/)
