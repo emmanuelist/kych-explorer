@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f7931a"/>
+      <stop offset="100%" stop-color="#e8850f"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <rect width="128" height="128" rx="28" fill="url(#shine)"/>
+  <!-- Bitcoin ₿ symbol -->
+  <text x="64" y="96" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="92" fill="#fff">₿</text>
+  <!-- Small graph nodes to hint at "graph explorer" -->
+  <circle cx="22" cy="22" r="5" fill="#fff" opacity="0.5"/>
+  <circle cx="106" cy="22" r="5" fill="#fff" opacity="0.5"/>
+  <circle cx="106" cy="106" r="4" fill="#fff" opacity="0.35"/>
+  <line x1="22" y1="22" x2="44" y2="38" stroke="#fff" stroke-width="1.5" opacity="0.3"/>
+  <line x1="106" y1="22" x2="86" y2="38" stroke="#fff" stroke-width="1.5" opacity="0.3"/>
+  <line x1="106" y1="106" x2="86" y2="90" stroke="#fff" stroke-width="1.5" opacity="0.3"/>
+</svg>
