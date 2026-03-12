@@ -11,8 +11,9 @@ export function GraphLegend({ clusteringEnabled }: GraphLegendProps) {
     { color: "bg-[hsl(142,71%,45%)]", label: "Labeled" },
     { color: "bg-muted-foreground", label: "Coinbase" },
     { color: "bg-primary", label: "Selected" },
+    { color: "bg-accent", border: true, borderColor: "border-[hsl(239,84%,67%)]", label: "Expandable" },
     ...(clusteringEnabled
-      ? [{ color: "bg-[hsl(239,84%,67%)]", border: true, label: "Cluster" }]
+      ? [{ color: "bg-[hsl(239,84%,67%)]", border: true, borderColor: "border-[hsl(239,84%,67%)]/50", label: "Cluster" }]
       : []),
   ];
 
@@ -27,7 +28,7 @@ export function GraphLegend({ clusteringEnabled }: GraphLegendProps) {
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-2">
           <div
-            className={`w-2.5 h-2.5 rounded-full ${item.color} ${"border" in item && item.border ? "border border-dashed border-[hsl(239,84%,67%)]/50" : ""}`}
+            className={`w-2.5 h-2.5 rounded-full ${item.color} ${"border" in item && item.border ? `border border-dashed ${(item as any).borderColor || ""}` : ""}`}
           />
           <span className="text-[11px] text-foreground">{item.label}</span>
         </div>

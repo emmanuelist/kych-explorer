@@ -1,4 +1,4 @@
-import type { Transaction, BIP329Label, CytoscapeGraph } from "@/types";
+import type { Transaction, BIP329Label, CytoscapeGraph, HeuristicResult } from "@/types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -29,6 +29,14 @@ export const fetchTransaction = (txid: string) =>
 // Graph
 export const fetchGraph = (txid: string, depth = 3) =>
   request<CytoscapeGraph>(`/api/graph/cytoscape/${txid}?depth=${depth}`);
+
+// Expand a single node (click-to-expand)
+export const fetchGraphExpand = (txid: string) =>
+  request<CytoscapeGraph>(`/api/graph/expand/${txid}`);
+
+// Heuristics
+export const fetchHeuristics = (txid: string) =>
+  request<{ txid: string; heuristics: HeuristicResult[] }>(`/api/transactions/${txid}/heuristics`);
 
 // Labels
 export const fetchLabels = () =>

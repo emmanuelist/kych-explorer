@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Copy, ExternalLink, ChevronDown, ChevronRight, FileText, Check, Shield, Hash, Coins, Clock } from "lucide-react";
+import { Copy, ExternalLink, ChevronDown, ChevronRight, FileText, Check, Shield, Hash, Coins, Clock, AlertTriangle, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { fetchTransaction } from "@/lib/api";
+import { fetchTransaction, fetchHeuristics } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { useDemoMode } from "@/hooks/use-demo-mode";
@@ -45,6 +46,12 @@ export function TransactionDetails({ selectedTxid }: TransactionDetailsProps) {
   const { data: apiTx, isLoading } = useQuery({
     queryKey: ["transaction", selectedTxid],
     queryFn: () => fetchTransaction(selectedTxid!),
+    enabled: !!selectedTxid && !isDemoMode,
+  });
+
+  const { data: heuristicsData } = useQuery({
+    queryKey: ["heuristics", selectedTxid],
+    queryFn: () => fetchHeuristics(selectedTxid!),
     enabled: !!selectedTxid && !isDemoMode,
   });
 
@@ -254,9 +261,45 @@ export function TransactionDetails({ selectedTxid }: TransactionDetailsProps) {
           </CollapsibleContent>
         </Collapsible>
 
+        {/* Heuristics */}
+        {heuristicsData && heuristicsData.heuristics.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <AlertTriangle className="h-3 w-3" />
+              Heuristics ({heuristicsData.heuristics.length})
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {heuristicsData.heuristics.map((h) => (
+                <Tooltip key={h.id}>
+                  <TooltipTrigger>
+                    <Badge
+                      variant={h.severity === "warning" ? "destructive" : "secondary"}
+                      className={`text-[10px] cursor-help ${
+                        h.severity === "warning"
+                          ? "bg-[hsl(var(--warning))]/15 text-[hsl(var(--warning))] border-[hsl(var(--warning))]/30 hover:bg-[hsl(var(--warning))]/25"
+                          : "bg-accent/15 text-accent border-accent/30 hover:bg-accent/25"
+                      }`}
+                    >
+                      {h.severity === "warning" ? (
+                        <AlertTriangle className="h-2.5 w-2.5 mr-1" />
+                      ) : (
+                        <Info className="h-2.5 w-2.5 mr-1" />
+                      )}
+                      {h.label}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[240px] text-xs">
+                    {h.description}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* View on Mempool */}
         <Button variant="outline" size="sm" className="w-full text-xs" asChild>
-          <a href={`https://mempool.space/tx/${tx.txid}`} target="_blank" rel="noopener noreferrer">
+          <a href={`https://mempool.space/signet/tx/${tx.txid}`} target="_blank" rel="noopener noreferrer">
             <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
             View on Mempool
           </a>

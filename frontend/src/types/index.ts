@@ -33,6 +33,14 @@ export interface BIP329Label {
   spendable?: boolean;
 }
 
+export interface HeuristicResult {
+  id: string;
+  label: string;
+  description: string;
+  severity: "info" | "warning";
+  output_index?: number;
+}
+
 export interface CytoscapeNodeData {
   id: string;
   label: string;
@@ -40,6 +48,8 @@ export interface CytoscapeNodeData {
   value?: number;
   is_coinbase?: boolean;
   has_label?: boolean;
+  heuristics?: string[];
+  expandable?: boolean;
   parent?: string;
   is_cluster?: boolean;
   cluster_label?: string;

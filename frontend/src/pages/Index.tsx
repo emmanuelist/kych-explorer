@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
-import { fetchGraph, ApiError } from "@/lib/api";
+import { fetchGraph, fetchGraphExpand, ApiError } from "@/lib/api";
 import { Header } from "@/components/Header";
 import { TransactionGraph, TransactionGraphHandle } from "@/components/TransactionGraph";
 import { TransactionDetails } from "@/components/TransactionDetails";
@@ -20,6 +20,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { DemoModeProvider, useDemoMode } from "@/hooks/use-demo-mode";
+import type { CytoscapeGraph } from "@/types";
 
 function IndexContent() {
   const { toast } = useToast();
@@ -35,6 +36,9 @@ function IndexContent() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [breadcrumbTrail, setBreadcrumbTrail] = useState<string[]>([]);
+  const [accumulatedGraph, setAccumulatedGraph] = useState<CytoscapeGraph | null>(null);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [expanding, setExpanding] = useState(false);
   const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const graphRef = useRef<TransactionGraphHandle>(null);
@@ -45,7 +49,7 @@ function IndexContent() {
     error: graphError,
   } = useQuery({
     queryKey: ["graph", searchTxid],
-    queryFn: () => fetchGraph(searchTxid!, 3),
+    queryFn: () => fetchGraph(searchTxid!, 1),
     enabled: !!searchTxid && !isDemoMode,
     retry: 1,
   });
@@ -75,6 +79,42 @@ function IndexContent() {
     }
   }, [isDemoMode, defaultDemoTxid]);
 
+  // Initialize accumulated graph when initial data arrives, reset on new search
+  useEffect(() => {
+    if (graphData) {
+      setAccumulatedGraph(graphData);
+      setExpandedNodes(new Set());
+    }
+  }, [graphData]);
+
+  const handleExpandNode = useCallback(async (txid: string) => {
+    if (expanding || expandedNodes.has(txid)) return;
+    setExpanding(true);
+    try {
+      const expansion = await fetchGraphExpand(txid);
+      setAccumulatedGraph((prev) => {
+        if (!prev) return expansion;
+        const existingNodeIds = new Set(prev.nodes.map((n) => n.data.id));
+        const existingEdgeIds = new Set(prev.edges.map((e) => e.data.id));
+        const newNodes = expansion.nodes.filter((n) => !existingNodeIds.has(n.data.id));
+        const newEdges = expansion.edges.filter((e) => !existingEdgeIds.has(e.data.id));
+        return {
+          nodes: [...prev.nodes, ...newNodes],
+          edges: [...prev.edges, ...newEdges],
+        };
+      });
+      setExpandedNodes((prev) => new Set(prev).add(txid));
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Expand failed",
+        description: "Could not load ancestors for this transaction.",
+      });
+    } finally {
+      setExpanding(false);
+    }
+  }, [expanding, expandedNodes, toast]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -98,6 +138,8 @@ function IndexContent() {
     (txid: string) => {
       setSearchTxid(txid);
       setSelectedTxid(txid);
+      setAccumulatedGraph(null);
+      setExpandedNodes(new Set());
       setBreadcrumbTrail((prev) => {
         if (prev[prev.length - 1] === txid) return prev;
         return [...prev, txid];
@@ -126,8 +168,8 @@ function IndexContent() {
     if (!isDemoMode) toggleDemoMode();
   }, [isDemoMode, toggleDemoMode]);
 
-  const activeGraphData = isDemoMode ? demoGraphData : graphData;
-  const activeLoading = isDemoMode ? false : graphLoading;
+  const activeGraphData = isDemoMode ? demoGraphData : accumulatedGraph ?? graphData;
+  const activeLoading = isDemoMode ? false : (graphLoading && !accumulatedGraph);
 
   return (
     <div className="flex flex-col h-screen bg-background">
@@ -153,6 +195,8 @@ function IndexContent() {
               graphData={activeGraphData}
               isLoading={activeLoading}
               onNodeSelect={handleNodeSelect}
+              onExpandNode={handleExpandNode}
+              expandedNodes={expandedNodes}
               onDemoActivate={!isDemoMode ? handleDemoActivate : undefined}
             />
           </div>
@@ -199,6 +243,8 @@ function IndexContent() {
                 graphData={activeGraphData}
                 isLoading={activeLoading}
                 onNodeSelect={handleNodeSelect}
+                onExpandNode={handleExpandNode}
+                expandedNodes={expandedNodes}
                 onDemoActivate={!isDemoMode ? handleDemoActivate : undefined}
               />
             </div>

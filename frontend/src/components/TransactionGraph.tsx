@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { GraphLegend } from "@/components/GraphLegend";
 import { GraphMinimap } from "@/components/GraphMinimap";
 import { useAnimatedNumber } from "@/hooks/use-animated-number";
-import { fadeInUp, scaleIn, springTransition } from "@/lib/motion";
+import { fadeInUp, springTransition } from "@/lib/motion";
 import { clusterByAddress } from "@/lib/graph-clustering";
 import { DEMO_TRANSACTIONS } from "@/lib/mock-data";
 import type { CytoscapeGraph } from "@/types";
@@ -52,6 +52,34 @@ const STYLESHEET: cytoscape.StylesheetStyle[] = [
       "background-color": "#f7931a",
       "border-color": "#f7931a",
       "border-width": 3,
+    } as any,
+  },
+  {
+    selector: "node[?expandable]",
+    style: {
+      "border-style": "dashed",
+      "border-color": "#6366f1",
+      "border-width": 2.5,
+    } as any,
+  },
+  {
+    selector: "node.expanded",
+    style: {
+      "border-style": "solid",
+      "border-color": "#1e293b",
+      "border-width": 2,
+    } as any,
+  },
+  {
+    selector: "node.has-warning",
+    style: {
+      "background-image": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOCIgaGVpZ2h0PSI4IiB2aWV3Qm94PSIwIDAgOCA4IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxjaXJjbGUgY3g9IjQiIGN5PSI0IiByPSI0IiBmaWxsPSIjZjU5ZTBiIi8+PC9zdmc+",
+      "background-position-x": "100%",
+      "background-position-y": "0%",
+      "background-width": "10px",
+      "background-height": "10px",
+      "background-clip": "none",
+      "bounds-expansion": 5,
     } as any,
   },
   {
@@ -146,6 +174,8 @@ interface TransactionGraphProps {
   graphData: CytoscapeGraph | undefined;
   isLoading: boolean;
   onNodeSelect: (txid: string) => void;
+  onExpandNode?: (txid: string) => void;
+  expandedNodes?: Set<string>;
   onDemoActivate?: () => void;
 }
 
@@ -180,26 +210,53 @@ function Particles() {
 }
 
 // Tooltip on hover
-function NodeTooltip({ data, position }: { data: { txid: string; value?: number; label?: string } | null; position: { x: number; y: number } }) {
+function NodeTooltip({
+  data,
+  position,
+  containerRef,
+}: {
+  data: { txid: string; value?: number; label?: string; expandable?: boolean } | null;
+  position: { x: number; y: number };
+  containerRef: React.RefObject<HTMLDivElement>;
+}) {
+  // Clamp position so tooltip stays within container bounds
+  const clampedPos = useMemo(() => {
+    if (!data || !containerRef.current) return position;
+    const rect = containerRef.current.getBoundingClientRect();
+    const tooltipW = 220;
+    const tooltipH = 80;
+    let x = position.x + 14;
+    let y = position.y - 12;
+    // Flip right → left if overflowing
+    if (x + tooltipW > rect.width) x = position.x - tooltipW - 8;
+    // Flip down → up if overflowing
+    if (y + tooltipH > rect.height) y = position.y - tooltipH - 8;
+    if (y < 0) y = 4;
+    if (x < 0) x = 4;
+    return { x, y };
+  }, [data, position, containerRef]);
+
   return (
     <AnimatePresence>
       {data && (
         <motion.div
-          variants={scaleIn}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          className="absolute z-20 glass rounded-lg px-3 py-2 space-y-1 pointer-events-none"
-          style={{ left: position.x + 12, top: position.y - 10 }}
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.92 }}
+          transition={{ duration: 0.12 }}
+          className="absolute z-50 glass rounded-lg px-3 py-2 space-y-1 pointer-events-none shadow-lg border border-border/40"
+          style={{ left: clampedPos.x, top: clampedPos.y, minWidth: 180, maxWidth: 260 }}
         >
           <p className="font-mono text-[11px] text-foreground">{`${data.txid.slice(0, 8)}…${data.txid.slice(-8)}`}</p>
           {data.value !== undefined && (
             <p className="text-[10px] text-muted-foreground">
-              {data.value.toFixed(8)} <span className="text-primary">BTC</span>
+              {(data.value / 1e8).toFixed(8)} <span className="text-primary">BTC</span>
             </p>
           )}
           {data.label && <p className="text-[10px] text-accent">{data.label}</p>}
-          <p className="text-[9px] text-muted-foreground/60">Click to inspect</p>
+          <p className="text-[9px] text-muted-foreground/60 italic">
+            {data.expandable ? "⇢ Double-click to expand · Click to inspect" : "⇢ Click to inspect"}
+          </p>
         </motion.div>
       )}
     </AnimatePresence>
@@ -207,13 +264,21 @@ function NodeTooltip({ data, position }: { data: { txid: string; value?: number;
 }
 
 export const TransactionGraph = forwardRef<TransactionGraphHandle, TransactionGraphProps>(
-  function TransactionGraph({ graphData, isLoading, onNodeSelect, onDemoActivate }, ref) {
+  function TransactionGraph({ graphData, isLoading, onNodeSelect, onExpandNode, expandedNodes, onDemoActivate }, ref) {
     const cyRef = useRef<cytoscape.Core | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [hoverData, setHoverData] = useState<{ txid: string; value?: number; label?: string } | null>(null);
+    const [hoverData, setHoverData] = useState<{ txid: string; value?: number; label?: string; expandable?: boolean } | null>(null);
     const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
     const [clusteringEnabled, setClusteringEnabled] = useState(false);
     const [cyReady, setCyReady] = useState<cytoscape.Core | null>(null);
+
+    // Keep stable refs for callbacks used inside Cytoscape event handlers
+    const onNodeSelectRef = useRef(onNodeSelect);
+    onNodeSelectRef.current = onNodeSelect;
+    const onExpandNodeRef = useRef(onExpandNode);
+    onExpandNodeRef.current = onExpandNode;
+    const expandedNodesRef = useRef(expandedNodes);
+    expandedNodesRef.current = expandedNodes;
 
     useImperativeHandle(ref, () => ({
       fitGraph: () => cyRef.current?.fit(undefined, 40),
@@ -247,41 +312,120 @@ export const TransactionGraph = forwardRef<TransactionGraphHandle, TransactionGr
       (cy: cytoscape.Core) => {
         cyRef.current = cy;
         setCyReady(cy);
+
+        // Tap to select
         cy.on("tap", "node", (e) => {
           const node = e.target;
-          if (node.data("is_cluster")) return; // don't select cluster parents
+          if (node.data("is_cluster")) return;
           const txid = node.data("txid");
           if (txid) {
-            onNodeSelect(txid);
+            onNodeSelectRef.current(txid);
             node.animate({ style: { "border-width": 8, "border-color": "#f7931a" } as any }, { duration: 150, complete: () => {
               node.animate({ style: { "border-width": 3, "border-color": "#f7931a" } as any }, { duration: 200 });
             }});
           }
         });
+
+        // Double-tap to expand
+        cy.on("dbltap", "node", (e) => {
+          const node = e.target;
+          if (node.data("is_cluster")) return;
+          const txid = node.data("txid");
+          if (txid && node.data("expandable") && onExpandNodeRef.current && !expandedNodesRef.current?.has(txid)) {
+            onExpandNodeRef.current(txid);
+          }
+        });
+
+        // Hover tooltip — track mouse position relative to container
+        let hoveredNodeId: string | null = null;
+        let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const clearHideTimer = () => {
+          if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+        };
+
+        const hideTooltip = () => {
+          hoveredNodeId = null;
+          document.body.style.cursor = "";
+          setHoverData(null);
+        };
+
         cy.on("mouseover", "node", (e) => {
           const node = e.target;
           if (node.data("is_cluster")) return;
+          clearHideTimer();
+          hoveredNodeId = node.id();
           document.body.style.cursor = "pointer";
+
           const container = containerRef.current;
           if (container) {
-            const renderedPos = node.renderedPosition();
+            const rect = container.getBoundingClientRect();
+            const mouseX = (e.originalEvent as MouseEvent).clientX - rect.left;
+            const mouseY = (e.originalEvent as MouseEvent).clientY - rect.top;
+            setHoverPos({ x: mouseX, y: mouseY });
             setHoverData({
               txid: node.data("txid"),
               value: node.data("value"),
               label: node.data("label"),
+              expandable: node.data("expandable") && !expandedNodesRef.current?.has(node.data("txid")),
             });
-            setHoverPos({ x: renderedPos.x, y: renderedPos.y });
           }
         });
-        cy.on("mouseout", "node", () => {
-          document.body.style.cursor = "";
-          setHoverData(null);
+
+        cy.on("mousemove", "node", (e) => {
+          const container = containerRef.current;
+          if (container && hoveredNodeId) {
+            clearHideTimer();
+            const rect = container.getBoundingClientRect();
+            const mouseX = (e.originalEvent as MouseEvent).clientX - rect.left;
+            const mouseY = (e.originalEvent as MouseEvent).clientY - rect.top;
+            setHoverPos({ x: mouseX, y: mouseY });
+          }
+        });
+
+        cy.on("mouseout", "node", (e) => {
+          const node = e.target;
+          if (node.id() === hoveredNodeId) {
+            // Linger for 600ms so user has time to read and click
+            clearHideTimer();
+            hideTimer = setTimeout(hideTooltip, 600);
+          }
+        });
+
+        // Hide immediately on tap (user clicked to inspect)
+        cy.on("tap", (e) => {
+          clearHideTimer();
+          hideTooltip();
+        });
+
+        // Also hide tooltip when panning/zooming
+        cy.on("viewport", () => {
+          if (hoveredNodeId) {
+            clearHideTimer();
+            hideTooltip();
+          }
         });
       },
-      [onNodeSelect]
+      [] // stable — uses refs for all changing values
     );
 
     const [isReady, setIsReady] = useState(false);
+
+    // Apply CSS classes for expanded nodes and heuristic warnings
+    useEffect(() => {
+      const cy = cyRef.current;
+      if (!cy || !graphData) return;
+      cy.nodes().forEach((node) => {
+        const txid = node.data("txid");
+        if (expandedNodes?.has(txid)) {
+          node.addClass("expanded");
+        }
+        const heuristics: string[] = node.data("heuristics") || [];
+        if (heuristics.some((h) => h === "address_reuse" || h === "script_mismatch")) {
+          node.addClass("has-warning");
+        }
+      });
+    }, [graphData, expandedNodes]);
 
     useEffect(() => {
       if (cyRef.current && graphData) {
@@ -366,7 +510,7 @@ export const TransactionGraph = forwardRef<TransactionGraphHandle, TransactionGr
                 style={{ width: "100%", height: "100%" }}
               />
 
-              <NodeTooltip data={hoverData} position={hoverPos} />
+              <NodeTooltip data={hoverData} position={hoverPos} containerRef={containerRef} />
               <GraphLegend clusteringEnabled={clusteringEnabled} />
               <GraphMinimap cy={cyReady} />
 
