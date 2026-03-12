@@ -9,12 +9,30 @@ A privacy-first Bitcoin transaction ancestry explorer. Trace the provenance of a
 
 ---
 
+## Screenshots
+
+**Transaction inspection** — click any node to inspect, hover for tooltip with BTC value.  
+Heuristic badges (Round Payment, Script Mismatch, RBF Signaling, Locktime Set) shown below.
+
+![KYCH — Transaction Inspection](assets/kych-inspect.png)
+
+**Progressive exploration** — double-click expandable nodes to walk deeper into the ancestry.  
+11 nodes explored across the graph with full breadcrumb trail.
+
+![KYCH — Graph Exploration](assets/kych-explore.png)
+
+---
+
 ## Features
 
-- **Transaction Graph Traversal** — Recursively walk backward through transaction inputs to map coin provenance
+- **Click-to-Expand Graph** — Starts at depth 1; double-click any node to progressively explore backwards through ancestors without cluttering the UI
+- **8 Wallet Fingerprinting Heuristics** — Round payment, address reuse, change output detection, consolidation, script type mismatch, RBF signaling, locktime analysis, and unnecessary input heuristic (UIOH)
 - **Interactive Graph Visualization** — Cytoscape.js‑powered directed acyclic graph with dagre layout, zoom controls, minimap, and address clustering
 - **BIP-329 Label Management** — Create, edit, import, and export labels in the wallet-standard JSON Lines format
-- **Privacy-First Architecture** — All data comes from your local Bitcoin Core RPC; zero third-party API calls
+- **Dual Backend Support** — Use Bitcoin Core RPC or Electrum server as interchangeable backends
+- **Privacy-First Architecture** — All data comes from your local node; zero third-party API calls
+- **Breadcrumb Trail** — Track your full exploration path across the graph
+- **Node Tooltips** — Hover any node to see txid, value, and expansion hints
 - **Demo Mode** — Explore the UI with built-in sample data, no node required
 - **Command Palette** — `⌘K` quick-search for any transaction by ID
 
@@ -27,11 +45,11 @@ A privacy-first Bitcoin transaction ancestry explorer. Trace the provenance of a
 │         Frontend            │ ◄──────────────────► │          Backend            │
 │  React · TypeScript · Vite  │    localhost:8000     │   FastAPI · Python 3.11+    │
 │  Tailwind · shadcn/ui       │                       │   NetworkX · httpx          │
-│  Cytoscape.js · Framer      │                       │   BIP-329 label store       │
+│  Cytoscape.js · Framer      │                       │   BIP-329 · 8 Heuristics    │
 └─────────────────────────────┘                       └──────────┬──────────────────┘
                                                                  │ JSON-RPC
                                                       ┌──────────▼──────────────────┐
-                                                      │       Bitcoin Core          │
+                                                      │  Bitcoin Core  OR  Electrum │
                                                       │  signet / mainnet / testnet │
                                                       │  txindex=1  ·  RPC enabled  │
                                                       └─────────────────────────────┘
@@ -129,6 +147,8 @@ bitcoind -reindex
 | `GET` | `/api/transactions/{txid}` | Fetch parsed transaction |
 | `GET` | `/api/graph/traverse/{txid}?depth=3` | Build ancestry graph |
 | `GET` | `/api/graph/cytoscape/{txid}?depth=3` | Cytoscape.js-formatted graph |
+| `GET` | `/api/graph/expand/{txid}` | Expand single node (click-to-expand) |
+| `GET` | `/api/transactions/{txid}/heuristics` | Run 8 fingerprinting heuristics |
 | `GET` | `/api/labels` | List all labels |
 | `POST` | `/api/labels` | Create / update a label |
 | `DELETE` | `/api/labels/{type}/{ref}` | Delete a label |
@@ -152,9 +172,11 @@ kych-explorer/
 │   │   ├── models/
 │   │   │   └── schemas.py    # Pydantic data models
 │   │   ├── services/
-│   │   │   ├── bitcoin_rpc.py    # Bitcoin Core JSON-RPC client
-│   │   │   ├── graph_service.py  # BFS graph traversal + NetworkX
-│   │   │   └── label_store.py    # JSONL file-based label persistence
+│   │   │   ├── bitcoin_rpc.py      # Bitcoin Core JSON-RPC client
+│   │   │   ├── electrum_client.py  # Electrum server protocol client
+│   │   │   ├── graph_service.py    # BFS graph traversal + NetworkX
+│   │   │   ├── heuristics.py       # 8 wallet fingerprinting heuristics
+│   │   │   └── label_store.py      # JSONL file-based label persistence
 │   │   ├── config.py         # Settings via pydantic-settings
 │   │   └── main.py           # FastAPI entry point
 │   ├── tests/
@@ -165,7 +187,8 @@ kych-explorer/
 │   │   └── favicon.svg
 │   ├── src/
 │   │   ├── components/       # React components
-│   │   │   ├── TransactionGraph.tsx   # Cytoscape graph visualization
+│   │   │   ├── TransactionGraph.tsx   # Cytoscape graph + click-to-expand
+│   │   │   ├── TransactionDetails.tsx # Tx details + heuristic badges
 │   │   │   ├── GraphBreadcrumb.tsx    # Transaction trail breadcrumb
 │   │   │   ├── GraphLegend.tsx
 │   │   │   ├── GraphMinimap.tsx
@@ -183,13 +206,30 @@ kych-explorer/
 
 ---
 
+## Wallet Fingerprinting Heuristics
+
+KYCH runs 8 heuristics on every transaction to surface privacy-relevant patterns:
+
+| # | Heuristic | Description |
+|---|-----------|-------------|
+| 1 | **Round Payment** | Output value is a round BTC amount (e.g. 0.1, 1.0) |
+| 2 | **Address Reuse** | An input address also appears in the outputs |
+| 3 | **Change Output** | In a 2-output tx, the non-round output is likely change |
+| 4 | **Consolidation** | Multiple inputs merged into a single output |
+| 5 | **Script Mismatch** | Input and output address types differ (e.g. P2WPKH → P2TR) |
+| 6 | **RBF Signaling** | At least one input has sequence < 0xFFFFFFFE |
+| 7 | **Locktime Set** | nLockTime > 0, indicating anti-fee-sniping or timelocks |
+| 8 | **Unnecessary Input (UIOH)** | A single input could cover all outputs; extra inputs likely same wallet |
+
+---
+
 ## Tech Stack
 
 **Frontend:** React 18 · TypeScript · Vite · Tailwind CSS · shadcn/ui · Cytoscape.js · Framer Motion · React Query · React Router v6
 
-**Backend:** Python · FastAPI · Pydantic · httpx · NetworkX · BIP-329 JSONL
+**Backend:** Python · FastAPI · Pydantic · httpx · NetworkX · BIP-329 JSONL · 8 Heuristics
 
-**Infrastructure:** Bitcoin Core JSON-RPC · Vercel (frontend) · Local node (backend)
+**Infrastructure:** Bitcoin Core JSON-RPC or Electrum · Vercel (frontend) · Local node (backend)
 
 ---
 
