@@ -1,6 +1,7 @@
 """Transaction graph traversal and building service."""
 
 from typing import Optional
+import asyncio
 import networkx as nx
 
 from app.models.schemas import (
@@ -32,55 +33,57 @@ class GraphService:
         except BitcoinRPCError:
             return None
         
-        # Parse inputs
-        inputs = []
-        for vin in raw_tx.get("vin", []):
+        # ── Inputs: fetch all prev-txs in parallel ──────────────────────
+        raw_vins = raw_tx.get("vin", [])
+
+        async def _resolve_input(vin: dict) -> TxInput:
             if "coinbase" in vin:
-                # Coinbase transaction
-                inputs.append(TxInput(txid="coinbase", vout=0))
-            else:
-                inp = TxInput(
-                    txid=vin["txid"],
-                    vout=vin["vout"],
-                )
-                # Try to get input value and address from previous tx
-                try:
-                    prev_tx = await self.rpc.get_raw_transaction(vin["txid"], verbose=True)
-                    prev_out = prev_tx["vout"][vin["vout"]]
-                    inp.value = int(prev_out["value"] * 100_000_000)
-                    if "addresses" in prev_out.get("scriptPubKey", {}):
-                        inp.address = prev_out["scriptPubKey"]["addresses"][0]
-                    elif "address" in prev_out.get("scriptPubKey", {}):
-                        inp.address = prev_out["scriptPubKey"]["address"]
-                except (BitcoinRPCError, KeyError, IndexError):
-                    pass
-                
-                # Add label if exists
-                inp.label = self.labels.get_label("input", f"{txid}:{vin['vout']}")
-                inputs.append(inp)
-        
-        # Parse outputs
-        outputs = []
-        for vout in raw_tx.get("vout", []):
+                return TxInput(txid="coinbase", vout=0, sequence=vin.get("sequence"))
+            inp = TxInput(
+                txid=vin["txid"],
+                vout=vin["vout"],
+                sequence=vin.get("sequence"),
+            )
+            try:
+                prev_tx = await self.rpc.get_raw_transaction(vin["txid"], verbose=True)
+                prev_out = prev_tx["vout"][vin["vout"]]
+                inp.value = int(prev_out["value"] * 100_000_000)
+                spk = prev_out.get("scriptPubKey", {})
+                if "addresses" in spk:
+                    inp.address = spk["addresses"][0]
+                elif "address" in spk:
+                    inp.address = spk["address"]
+            except (BitcoinRPCError, KeyError, IndexError):
+                pass
+            inp.label = self.labels.get_label("input", f"{txid}:{vin['vout']}")
+            return inp
+
+        inputs: list[TxInput] = list(
+            await asyncio.gather(*[_resolve_input(vin) for vin in raw_vins])
+        )
+
+        # ── Outputs: check spent status in parallel ──────────────────────
+        raw_vouts = raw_tx.get("vout", [])
+
+        async def _resolve_output(vout: dict) -> TxOutput:
             address = None
-            script_pub_key = vout.get("scriptPubKey", {})
-            if "addresses" in script_pub_key:
-                address = script_pub_key["addresses"][0]
-            elif "address" in script_pub_key:
-                address = script_pub_key["address"]
-            
-            # Check if spent
+            spk = vout.get("scriptPubKey", {})
+            if "addresses" in spk:
+                address = spk["addresses"][0]
+            elif "address" in spk:
+                address = spk["address"]
             utxo = await self.rpc.get_tx_out(txid, vout["n"])
-            spent = utxo is None
-            
-            out = TxOutput(
+            return TxOutput(
                 n=vout["n"],
                 address=address,
                 value=int(vout["value"] * 100_000_000),
-                spent=spent,
+                spent=utxo is None,
                 label=self.labels.get_label("output", f"{txid}:{vout['n']}"),
             )
-            outputs.append(out)
+
+        outputs: list[TxOutput] = list(
+            await asyncio.gather(*[_resolve_output(v) for v in raw_vouts])
+        )
         
         # Calculate fee
         fee = None
@@ -100,6 +103,7 @@ class GraphService:
             fee=fee,
             total_value=total_out,
             is_coinbase=is_coinbase,
+            locktime=raw_tx.get("locktime"),
             inputs=inputs,
             outputs=outputs,
             label=self.labels.get_label("tx", txid),

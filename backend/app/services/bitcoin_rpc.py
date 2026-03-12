@@ -104,9 +104,17 @@ class BitcoinRPC:
 _rpc_client: Optional[BitcoinRPC] = None
 
 
-def get_rpc_client() -> BitcoinRPC:
-    """Get or create RPC client singleton."""
+def get_rpc_client():
+    """Get or create RPC client singleton.
+    
+    Returns a BitcoinRPC or ElectrumClient depending on the
+    ``backend_type`` setting.
+    """
     global _rpc_client
     if _rpc_client is None:
-        _rpc_client = BitcoinRPC()
+        if settings.backend_type == "electrum":
+            from app.services.electrum_client import ElectrumClient
+            _rpc_client = ElectrumClient()
+        else:
+            _rpc_client = BitcoinRPC()
     return _rpc_client

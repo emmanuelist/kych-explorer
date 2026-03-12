@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.schemas import Transaction
 from app.services.graph_service import get_graph_service
 from app.services.bitcoin_rpc import get_rpc_client, BitcoinRPCError
+from app.services.heuristics import analyze_transaction
 
 router = APIRouter()
 
@@ -19,6 +20,18 @@ async def get_transaction(txid: str):
         raise HTTPException(status_code=404, detail=f"Transaction {txid} not found")
     
     return tx
+
+
+@router.get("/{txid}/heuristics")
+async def get_transaction_heuristics(txid: str):
+    """Run wallet fingerprinting heuristics on a transaction."""
+    graph_service = get_graph_service()
+    tx = await graph_service.get_transaction(txid)
+    
+    if not tx:
+        raise HTTPException(status_code=404, detail=f"Transaction {txid} not found")
+    
+    return {"txid": txid, "heuristics": analyze_transaction(tx)}
 
 
 @router.get("/{txid}/raw")

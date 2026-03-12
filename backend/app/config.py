@@ -17,12 +17,20 @@ class Settings(BaseSettings):
     bitcoin_rpc_user: str = "lightning"
     bitcoin_rpc_password: str = "lightning"
     
+    # Electrum server
+    electrum_host: str = "127.0.0.1"
+    electrum_port: int = 50001
+    electrum_ssl: bool = False
+    
+    # Backend type: "bitcoin_core" or "electrum"
+    backend_type: str = "bitcoin_core"
+    
     # Graph settings
     max_traversal_depth: int = 10
     max_inputs_per_tx: int = 100
     
     # CORS (for frontend)
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]
     cors_origin_regex: str = r"https://.*\.vercel\.app"
     
     class Config:

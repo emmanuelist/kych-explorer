@@ -31,6 +31,7 @@ class TxInput(BaseModel):
     vout: int
     address: Optional[str] = None
     value: Optional[int] = None  # satoshis
+    sequence: Optional[int] = None
     label: Optional[str] = None
 
 
@@ -55,6 +56,7 @@ class Transaction(BaseModel):
     fee: Optional[int] = None
     total_value: int = 0
     is_coinbase: bool = False
+    locktime: Optional[int] = None
     inputs: list[TxInput] = []
     outputs: list[TxOutput] = []
     label: Optional[str] = None
