@@ -61,23 +61,50 @@ Heuristic badges (Round Payment, Script Mismatch, RBF Signaling, Locktime Set) s
 
 | Dependency | Version | Notes |
 |---|---|---|
+| **Docker** | 20+ | For the one-command setup |
 | **Bitcoin Core** | 25.0+ | `txindex=1` and RPC enabled |
-| **Python** | 3.11+ | For the backend |
-| **Node.js** | 18+ | For the frontend |
-| **npm** | 9+ | Package manager |
+| **Python** | 3.11+ | For manual setup only |
+| **Node.js** | 18+ | For manual setup only |
+| **npm** | 9+ | For manual setup only |
 
 ---
 
 ## Quick Start
 
-### 1. Clone
+### Docker (recommended)
+
+The fastest way to get running — only requires Docker and a Bitcoin Core node:
+
+```bash
+git clone git@github.com:emmanuelist/kych-explorer.git
+cd kych-explorer
+
+# Configure your Bitcoin Core RPC credentials
+cp backend/.env.example backend/.env
+# Edit backend/.env with your RPC host/user/password
+
+docker compose up --build
+```
+
+Open `http://localhost` in your browser. The API is at `http://localhost:8000/docs`.
+
+> **Note:** The backend connects to Bitcoin Core on your host machine via `host.docker.internal`.
+> If your node runs on a different host, set `BITCOIN_RPC_HOST` in `backend/.env` or pass it directly:
+>
+> ```bash
+> BITCOIN_RPC_HOST=192.168.1.50 BITCOIN_RPC_PORT=38332 docker compose up --build
+> ```
+
+### Manual Setup
+
+#### 1. Clone
 
 ```bash
 git clone git@github.com:emmanuelist/kych-explorer.git
 cd kych-explorer
 ```
 
-### 2. Backend
+#### 2. Backend
 
 ```bash
 cd backend
@@ -95,7 +122,7 @@ uvicorn app.main:app --reload --port 8000
 
 The API is now running at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
 
-### 3. Frontend
+#### 3. Frontend
 
 ```bash
 cd frontend
@@ -108,7 +135,7 @@ echo "VITE_API_BASE_URL=http://localhost:8000" > .env
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:8080` in your browser.
 
 ---
 
@@ -181,6 +208,7 @@ kych-explorer/
 │   │   └── main.py           # FastAPI entry point
 │   ├── tests/
 │   ├── .env.example
+│   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
 │   ├── public/
@@ -200,7 +228,10 @@ kych-explorer/
 │   │   └── types/            # TypeScript interfaces
 │   ├── index.html
 │   ├── tailwind.config.ts
+│   ├── Dockerfile
+│   ├── nginx.conf
 │   └── vite.config.ts
+├── docker-compose.yml
 └── README.md
 ```
 

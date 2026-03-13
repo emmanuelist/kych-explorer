@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     max_inputs_per_tx: int = 100
     
     # CORS (for frontend)
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]
+    cors_origins: list[str] = ["http://localhost", "http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]
     cors_origin_regex: str = r"https://.*\.vercel\.app"
     
     class Config:
